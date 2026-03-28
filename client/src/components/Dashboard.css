@@ -424,10 +424,22 @@
   }
   
   .motivation-icon {
-    font-size: 40px;
+    font-size: 32px;
+  }
+
+  .motivation-text h2 {
+    font-size: 24px;
   }
   
-  .skills-row, .insights-row {
+  .stats-grid, .insights-row {
     grid-template-columns: 1fr;
+  }
+
+  .streak-number {
+    font-size: 36px;
+  }
+
+  .consistency-number {
+    font-size: 28px;
   }
 }

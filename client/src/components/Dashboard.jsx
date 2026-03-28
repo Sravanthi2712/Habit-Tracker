@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
+import './spinner.css';
 
 const STORAGE_KEY_HABITS = "habit-tracker-monthly-v2";
 const STORAGE_KEY_TASKS = "task-tracker-v1";
 
+function getLocalISOString(date) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 function getTodayKey() {
-  return new Date().toISOString().split("T")[0];
+  return getLocalISOString(new Date());
 }
 
 function safeReadHabits() {
@@ -28,7 +34,9 @@ function safeReadTasks() {
 
 function calculateDashboardData() {
   const todayKey = getTodayKey();
-  
+  const todayDateObj = new Date();
+  todayDateObj.setHours(0, 0, 0, 0); // normalize for accurate day distance
+
   // Tasks Data
   const tasksByDate = safeReadTasks();
   const todayTasks = tasksByDate[todayKey] || [];
@@ -54,44 +62,76 @@ function calculateDashboardData() {
       }
     });
     
-    // Calculate streaks
-    const today = new Date();
+    // Find past 30 days keys for Consistency calculation
     const pastDays = [];
     for (let i = 0; i < 30; i++) { 
-       const d = new Date(today);
+       const d = new Date();
        d.setDate(d.getDate() - i);
-       pastDays.push(d.toISOString().split('T')[0]);
+       pastDays.push(getLocalISOString(d));
     }
 
     let globalMaxStreak = 0;
     let globalActiveStreak = 0;
     
     habits.forEach(h => {
+      if (!h.checks) return;
+
+      // Extract all dates this habit was checked
+      const checkedDates = Object.keys(h.checks)
+        .filter(k => h.checks[k] && /^\d{4}-\d{2}-\d{2}$/.test(k)) // valid format & checked true
+        .map(k => {
+          const [y, m, d] = k.split('-');
+          // Create local date at midnight to avoid tz issues
+          return new Date(Number(y), Number(m) - 1, Number(d));
+        })
+        .sort((a, b) => a - b); // sort chronologically
+
       let currentHabitStreak = 0;
       let maxHabitStreak = 0;
-      let streakActive = true;
-      let tempStreak = 0;
+      
+      // Calculate Longest Streak by scanning all time checks
+      if (checkedDates.length > 0) {
+        let tempStreak = 1;
+        maxHabitStreak = 1; // At least one checked day
 
-      for (let i = 0; i < 100; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        const k = d.toISOString().split('T')[0];
-        
-        const isChecked = h.checks && h.checks[k];
-        if (isChecked) {
-          tempStreak++;
-          if (tempStreak > maxHabitStreak) maxHabitStreak = tempStreak;
-          if (streakActive) currentHabitStreak++;
-        } else {
-          if (i === 0) {
-            // today unchecked doesn't break active streak, but wait to add
-          } else {
-            streakActive = false;
-            tempStreak = 0;
+        for (let i = 1; i < checkedDates.length; i++) {
+          const diffTime = Math.abs(checkedDates[i] - checkedDates[i - 1]);
+          const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+          
+          if (diffDays === 1) {
+            tempStreak++;
+            if (tempStreak > maxHabitStreak) {
+              maxHabitStreak = tempStreak;
+            }
+          } else if (diffDays > 1) {
+            tempStreak = 1;
           }
         }
       }
+
+      // Calculate Current Streak
+      // We start going backwards from today until we hit an unchecked day.
+      // If today is unchecked, we just skip it, but if yesterday is checked we still have a streak.
+      let tempCurrent = 0;
+      let streakActive = true;
+      let safetyCounter = 0;
+      let backDate = new Date();
       
+      while (streakActive && safetyCounter < 10000) {
+        const k = getLocalISOString(backDate);
+        if (h.checks[k]) {
+          tempCurrent++;
+        } else {
+          // If it's today and not checked, we allow the streak to continue looking at yesterday
+          if (safetyCounter !== 0) {
+            streakActive = false;
+          }
+        }
+        backDate.setDate(backDate.getDate() - 1);
+        safetyCounter++;
+      }
+      currentHabitStreak = tempCurrent;
+
       if (maxHabitStreak > globalMaxStreak) globalMaxStreak = maxHabitStreak;
       if (currentHabitStreak > globalActiveStreak) globalActiveStreak = currentHabitStreak;
     });
@@ -145,12 +185,35 @@ function calculateDashboardData() {
   };
 }
 
+import { generateInsights } from '../services/aiService';
+
 export default function Dashboard({ onNavigate }) {
   const [data, setData] = useState(() => calculateDashboardData());
+  const [aiInsights, setAiInsights] = useState(data.insights);
+  const [isAiLoading, setIsAiLoading] = useState(false);
 
   useEffect(() => {
     // Re-calculate when component mounts or becomes visible
-    setData(calculateDashboardData());
+    const initialData = calculateDashboardData();
+    setData(initialData);
+
+    async function fetchAi() {
+      if (!import.meta.env.VITE_GEMINI_API_KEY) return;
+      
+      setIsAiLoading(true);
+      try {
+        const generated = await generateInsights(initialData);
+        if (generated && generated.length > 0) {
+          setAiInsights(generated);
+        }
+      } catch (err) {
+        console.error("AI Insights Error:", err);
+      } finally {
+        setIsAiLoading(false);
+      }
+    }
+    
+    fetchAi();
   }, []);
 
   // SVG Icons
@@ -283,14 +346,21 @@ export default function Dashboard({ onNavigate }) {
         {/* Right Section: Suggestions / AI Insights */}
         <div className="insight-card ai-insights">
           <h3>AI Insights</h3>
-          <ul className="insights-list">
-            {data.insights.map((insight, idx) => (
-               <li key={idx}>
-                 <span className="insight-bullet">{insight.icon}</span>
-                 <p>{insight.text}</p>
-               </li>
-            ))}
-          </ul>
+          {isAiLoading ? (
+             <div className="insights-loading">
+                <div className="spinner"></div>
+                <p>Consulting your AI coach...</p>
+             </div>
+          ) : (
+            <ul className="insights-list">
+              {aiInsights.map((insight, idx) => (
+                 <li key={idx}>
+                   <span className="insight-bullet">{insight.icon}</span>
+                   <p>{insight.text}</p>
+                 </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
     </div>

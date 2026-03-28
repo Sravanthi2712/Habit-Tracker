@@ -541,3 +541,24 @@ body {
 .view-toggle-bar .toggle-btn:hover { background: #edf2f7; }
 .view-toggle-bar .toggle-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
 .task-view-container { flex: 1; overflow-y: auto; position: relative; }
+
+@media (max-width: 480px) {
+  .task-form {
+    grid-template-columns: 1fr;
+  }
+  .task-panel-header h2 {
+    font-size: 18px;
+  }
+  .mode-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+    flex: 1;
+  }
+  .task-toolbar {
+    display: flex;
+    justify-content: space-between;
+  }
+  .task-inline-input {
+    min-width: 120px;
+  }
+}

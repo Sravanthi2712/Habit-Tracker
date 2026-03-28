@@ -302,10 +302,13 @@ export default function HabitPage() {
                     <div className="analysis-value">
                       {habit.goal ?? 0} / {actual}
                     </div>
-                    <div className="progress-track" aria-label="Habit progress">
-                      <div className="progress-fill" style={{ width: `${progress}%` }} />
+                    <div 
+                      className="habit-circular-progress" 
+                      aria-label="Habit progress" 
+                      style={{background: `conic-gradient(#10b981 ${progress}%, #e5e7eb 0)`}}
+                    >
+                      <span className="habit-progress-text">{progress}%</span>
                     </div>
-                    <div className="progress-label">{progress}%</div>
                   </td>
                 </tr>
               );
@@ -362,10 +365,13 @@ export default function HabitPage() {
 
                 return (
                   <td key={`progress-${day.key}`} className="analysis-progress-cell">
-                    <div className="mini-progress-track">
-                      <div className="mini-progress-fill" style={{ width: `${percent}%` }} />
+                    <div 
+                      className="mini-circular-progress" 
+                      aria-label="Daily progress" 
+                      style={{background: `conic-gradient(#16a34a ${percent}%, #e5e7eb 0)`}}
+                    >
+                      <span className="mini-progress-text">{percent}%</span>
                     </div>
-                    <div className="mini-progress-label">{percent}%</div>
                   </td>
                 );
               })}
