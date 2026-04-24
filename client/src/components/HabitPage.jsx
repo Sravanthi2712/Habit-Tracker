@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
+import useHabitStore from "../store/useHabitStore";
 import "./HabitPage.css";
-
-const STORAGE_KEY = "habit-tracker-monthly-v2";
 
 function pad2(value) {
   return String(value).padStart(2, "0");
@@ -31,112 +30,41 @@ function monthInfo(monthValue) {
   return { days, totalDays };
 }
 
-function safeReadStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.habits) || !parsed.selectedMonth) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
 export default function HabitPage() {
-  const initialState = useMemo(() => {
-    const saved = safeReadStorage();
-    if (saved) {
-      return saved;
-    }
-    return {
-      selectedMonth: "2025-12",
-      habits: []
-    };
-  }, []);
+  const selectedMonth = useHabitStore(state => state.selectedMonth);
+  const habits = useHabitStore(state => state.habits);
+  
+  const changeMonthStore = useHabitStore(state => state.changeMonth);
+  const addHabitRowStore = useHabitStore(state => state.addHabitRow);
+  const updateHabitNameStore = useHabitStore(state => state.updateHabitName);
+  const updateHabitGoalStore = useHabitStore(state => state.updateHabitGoal);
+  const toggleDayStore = useHabitStore(state => state.toggleDay);
+  const deleteHabitsStore = useHabitStore(state => state.deleteHabits);
 
-  const [selectedMonth, setSelectedMonth] = useState(initialState.selectedMonth);
-  const [habits, setHabits] = useState(initialState.habits);
   const [selectedHabitIds, setSelectedHabitIds] = useState(new Set());
   const [deleteMode, setDeleteMode] = useState(false);
   const [goalEditHabitId, setGoalEditHabitId] = useState(null);
 
   const { days } = useMemo(() => monthInfo(selectedMonth), [selectedMonth]);
 
-  function saveState(nextMonth, nextHabits) {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        selectedMonth: nextMonth,
-        habits: nextHabits
-      })
-    );
-  }
-
-  function updateHabits(updater) {
-    setHabits((prev) => {
-      const next = updater(prev);
-      saveState(selectedMonth, next);
-      return next;
-    });
-  }
-
   function changeMonth(nextMonth) {
-    setSelectedMonth(nextMonth);
-    saveState(nextMonth, habits);
+    changeMonthStore(nextMonth);
   }
 
   function addHabitRow() {
-    const defaultGoal = Math.max(20, Math.ceil(days.length * 0.7));
-    const newHabit = {
-      id: Date.now(),
-      name: `Habit ${habits.length + 1}`,
-      goal: defaultGoal,
-      checks: {}
-    };
-
-    updateHabits((prev) => [...prev, newHabit]);
+    addHabitRowStore(days.length);
   }
 
   function updateHabitName(id, name) {
-    updateHabits((prev) =>
-      prev.map((habit) => (habit.id === id ? { ...habit, name } : habit))
-    );
+    updateHabitNameStore(id, name);
   }
 
   function updateHabitGoal(id, goalValue) {
-    const normalized = Number(goalValue);
-    updateHabits((prev) =>
-      prev.map((habit) =>
-        habit.id === id
-          ? {
-              ...habit,
-              goal: Number.isNaN(normalized) ? 0 : Math.max(0, Math.floor(normalized))
-            }
-          : habit
-      )
-    );
+    updateHabitGoalStore(id, goalValue);
   }
 
   function toggleDay(id, key) {
-    updateHabits((prev) =>
-      prev.map((habit) => {
-        if (habit.id !== id) {
-          return habit;
-        }
-        return {
-          ...habit,
-          checks: {
-            ...habit.checks,
-            [key]: !habit.checks[key]
-          }
-        };
-      })
-    );
+    toggleDayStore(id, key);
   }
 
   function actualDone(habit) {
@@ -166,7 +94,7 @@ export default function HabitPage() {
 
   function deleteSelectedHabits() {
     if (selectedHabitIds.size === 0) return;
-    updateHabits((prev) => prev.filter((h) => !selectedHabitIds.has(h.id)));
+    deleteHabitsStore(selectedHabitIds);
     setSelectedHabitIds(new Set());
     setDeleteMode(false);
   }

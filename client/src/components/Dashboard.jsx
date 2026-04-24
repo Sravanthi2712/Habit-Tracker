@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import useTaskStore from "../store/useTaskStore";
+import useHabitStore from "../store/useHabitStore";
+import { generateInsights } from '../services/aiService';
 import './Dashboard.css';
 import './spinner.css';
-
-const STORAGE_KEY_HABITS = "habit-tracker-monthly-v2";
-const STORAGE_KEY_TASKS = "task-tracker-v1";
 
 function getLocalISOString(date) {
   const pad = n => String(n).padStart(2, '0');
@@ -14,55 +14,34 @@ function getTodayKey() {
   return getLocalISOString(new Date());
 }
 
-function safeReadHabits() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_HABITS);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
+export default function Dashboard({ onNavigate }) {
+  const tasksByDate = useTaskStore(state => state.tasksByDate);
+  const habits = useHabitStore(state => state.habits);
 
-function safeReadTasks() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_TASKS);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
+  const data = useMemo(() => {
+    const todayKey = getTodayKey();
+    const todayDateObj = new Date();
+    todayDateObj.setHours(0, 0, 0, 0);
 
-function calculateDashboardData() {
-  const todayKey = getTodayKey();
-  const todayDateObj = new Date();
-  todayDateObj.setHours(0, 0, 0, 0); // normalize for accurate day distance
-
-  // Tasks Data
-  const tasksByDate = safeReadTasks();
-  const todayTasks = tasksByDate[todayKey] || [];
-  const completedTasksCount = todayTasks.filter(t => t.done).length;
-  const pendingTasksCount = todayTasks.length - completedTasksCount;
-  
-  // Habits Data
-  const habitsData = safeReadHabits();
-  let todayHabitsCompleted = 0;
-  let totalHabits = 0;
-  let longestStreak = 0;
-  let consistencyPercent = 0;
-  let currentStreak = 0;
-  
-  if (habitsData && Array.isArray(habitsData.habits)) {
-    const habits = habitsData.habits;
-    totalHabits = habits.length;
+    // Tasks Data
+    const todayTasks = tasksByDate[todayKey] || [];
+    const completedTasksCount = todayTasks.filter(t => t.done).length;
+    const pendingTasksCount = todayTasks.length - completedTasksCount;
     
+    // Habits Data
+    let todayHabitsCompleted = 0;
+    let totalHabits = habits.length;
+    let longestStreak = 0;
+    let consistencyPercent = 0;
+    let currentStreak = 0;
+
     // Count today's completed
     habits.forEach(h => {
       if (h.checks && h.checks[todayKey]) {
         todayHabitsCompleted++;
       }
     });
-    
-    // Find past 30 days keys for Consistency calculation
+
     const pastDays = [];
     for (let i = 0; i < 30; i++) { 
        const d = new Date();
@@ -76,23 +55,20 @@ function calculateDashboardData() {
     habits.forEach(h => {
       if (!h.checks) return;
 
-      // Extract all dates this habit was checked
       const checkedDates = Object.keys(h.checks)
-        .filter(k => h.checks[k] && /^\d{4}-\d{2}-\d{2}$/.test(k)) // valid format & checked true
+        .filter(k => h.checks[k] && /^\d{4}-\d{2}-\d{2}$/.test(k))
         .map(k => {
           const [y, m, d] = k.split('-');
-          // Create local date at midnight to avoid tz issues
           return new Date(Number(y), Number(m) - 1, Number(d));
         })
-        .sort((a, b) => a - b); // sort chronologically
+        .sort((a, b) => a - b);
 
       let currentHabitStreak = 0;
       let maxHabitStreak = 0;
       
-      // Calculate Longest Streak by scanning all time checks
       if (checkedDates.length > 0) {
         let tempStreak = 1;
-        maxHabitStreak = 1; // At least one checked day
+        maxHabitStreak = 1;
 
         for (let i = 1; i < checkedDates.length; i++) {
           const diffTime = Math.abs(checkedDates[i] - checkedDates[i - 1]);
@@ -109,9 +85,6 @@ function calculateDashboardData() {
         }
       }
 
-      // Calculate Current Streak
-      // We start going backwards from today until we hit an unchecked day.
-      // If today is unchecked, we just skip it, but if yesterday is checked we still have a streak.
       let tempCurrent = 0;
       let streakActive = true;
       let safetyCounter = 0;
@@ -122,7 +95,6 @@ function calculateDashboardData() {
         if (h.checks[k]) {
           tempCurrent++;
         } else {
-          // If it's today and not checked, we allow the streak to continue looking at yesterday
           if (safetyCounter !== 0) {
             streakActive = false;
           }
@@ -149,60 +121,57 @@ function calculateDashboardData() {
     if (totalHabits > 0) {
       consistencyPercent = Math.round((totalChecks30Days / (totalHabits * 30)) * 100);
     }
-  }
 
-  const insights = [];
-  if (pendingTasksCount > 0) {
-    insights.push({ icon: '🎯', text: `You have ${pendingTasksCount} tasks remaining today. Let's finish strong!` });
-  } else if (todayTasks.length > 0 && pendingTasksCount === 0) {
-    insights.push({ icon: '🎉', text: "Incredible! You completed all your tasks for today." });
-  } else {
-    insights.push({ icon: '✍️', text: "Your task list is empty today. Plan your day to stay productive!" });
-  }
+    const insights = [];
+    if (pendingTasksCount > 0) {
+      insights.push({ icon: '🎯', text: `You have ${pendingTasksCount} tasks remaining today. Let's finish strong!` });
+    } else if (todayTasks.length > 0 && pendingTasksCount === 0) {
+      insights.push({ icon: '🎉', text: "Incredible! You completed all your tasks for today." });
+    } else {
+      insights.push({ icon: '✍️', text: "Your task list is empty today. Plan your day to stay productive!" });
+    }
 
-  if (totalHabits > 0 && todayHabitsCompleted === totalHabits) {
-    insights.push({ icon: '🔥', text: "Perfect day! You've checked off every habit today." });
-  } else if (todayHabitsCompleted > 0) {
-    insights.push({ icon: '💡', text: `You've got ${todayHabitsCompleted} habits done. Keep up the good work!` });
-  } else {
-    insights.push({ icon: '🌱', text: "A fresh start! Don't forget to complete your habits today." });
-  }
+    if (totalHabits > 0 && todayHabitsCompleted === totalHabits) {
+      insights.push({ icon: '🔥', text: "Perfect day! You've checked off every habit today." });
+    } else if (todayHabitsCompleted > 0) {
+      insights.push({ icon: '💡', text: `You've got ${todayHabitsCompleted} habits done. Keep up the good work!` });
+    } else {
+      insights.push({ icon: '🌱', text: "A fresh start! Don't forget to complete your habits today." });
+    }
 
-  return {
-    tasks: {
-      today: todayTasks.slice(0, 3), // max 3 preview
-      completed: completedTasksCount,
-      total: todayTasks.length
-    },
-    habits: {
-      todayCompleted: todayHabitsCompleted,
-      total: totalHabits,
-      longestStreak,
-      currentStreak,
-      consistencyPercent
-    },
-    insights
-  };
-}
+    return {
+      tasks: {
+        today: todayTasks.slice(0, 3), // max 3 preview
+        completed: completedTasksCount,
+        total: todayTasks.length
+      },
+      habits: {
+        todayCompleted: todayHabitsCompleted,
+        total: totalHabits,
+        longestStreak,
+        currentStreak,
+        consistencyPercent
+      },
+      insights
+    };
+  }, [tasksByDate, habits]);
 
-import { generateInsights } from '../services/aiService';
-
-export default function Dashboard({ onNavigate }) {
-  const [data, setData] = useState(() => calculateDashboardData());
   const [aiInsights, setAiInsights] = useState(data.insights);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  
+  // Reference for initial data so we don't spam the AI endpoint on every state change
+  const initialDataRef = useRef(data);
 
   useEffect(() => {
-    // Re-calculate when component mounts or becomes visible
-    const initialData = calculateDashboardData();
-    setData(initialData);
-
     async function fetchAi() {
-      if (!import.meta.env.VITE_GEMINI_API_KEY) return;
+      if (!import.meta.env.VITE_GEMINI_API_KEY) {
+        setAiInsights(initialDataRef.current.insights);
+        return;
+      }
       
       setIsAiLoading(true);
       try {
-        const generated = await generateInsights(initialData);
+        const generated = await generateInsights(initialDataRef.current);
         if (generated && generated.length > 0) {
           setAiInsights(generated);
         }
@@ -214,7 +183,7 @@ export default function Dashboard({ onNavigate }) {
     }
     
     fetchAi();
-  }, []);
+  }, []); // Run once on mount
 
   // SVG Icons
   const Icons = {

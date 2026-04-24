@@ -1,54 +1,54 @@
 .app-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  background-color: #f8fafc;
 }
 
-.app-nav {
+.app-main-wrapper {
+  flex: 1;
   display: flex;
-  justify-content: center;
-  gap: 16px;
-  padding: 16px;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.mobile-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
   background-color: #ffffff;
-  border-bottom: 1px solid #e1e4e8;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  overflow-x: auto;
-  white-space: nowrap;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  z-index: 50;
 }
 
-.nav-btn {
-  padding: 10px 24px;
-  font-size: 16px;
-  font-weight: 600;
+.hamburger-btn {
+  background: none;
   border: none;
-  border-radius: 8px;
-  background-color: transparent;
-  color: #555;
   cursor: pointer;
-  transition: all 0.2s;
+  padding: 4px;
+  margin-right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #475569;
+  border-radius: 4px;
+  transition: background-color 0.2s;
 }
 
-@media (max-width: 480px) {
-  .app-nav {
-    justify-content: flex-start;
-  }
-  .nav-btn {
-    padding: 8px 16px;
-    font-size: 14px;
-  }
+.hamburger-btn:hover {
+  background-color: #f1f5f9;
 }
 
-.nav-btn:hover {
-  background-color: #f0f2f5;
-  color: #333;
-}
-
-.nav-btn.active {
-  background-color: #2563eb;
-  color: white;
+.mobile-header-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-family: 'Inter', sans-serif;
 }
 
 .app-content {

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import useTaskStore from "../store/useTaskStore";
 import "./RangeTaskPage.css";
 
 function generateDateRange(startStr, endStr) {
@@ -25,22 +26,6 @@ function formatDisplayDate(date) {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-const STORAGE_KEY = "task-tracker-v1";
-
-function safeReadStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) || {};
-  } catch {
-    return {};
-  }
-}
-
-function safeWriteStorage(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
 function formatDayName(date) {
   return date.toLocaleDateString("en-US", { weekday: "long" });
 }
@@ -57,53 +42,35 @@ export default function RangeTaskPage() {
     return formatDateKey(d);
   });
 
-  const [tasksByDateInternal, setTasksByDateInternal] = useState(() => safeReadStorage());
+  // Zustand Store Connection
+  const tasksByDate = useTaskStore((state) => state.tasksByDate);
+  const addTaskStore = useTaskStore((state) => state.addTask);
+  const toggleTaskStore = useTaskStore((state) => state.toggleTask);
+  const deleteTaskStore = useTaskStore((state) => state.deleteTask);
   
-  function setTasksByDate(updater) {
-    setTasksByDateInternal(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      safeWriteStorage(next);
-      return next;
-    });
-  }
-  
-  const tasksByDate = tasksByDateInternal;
   const [inputsByDate, setInputsByDate] = useState({});
 
   const days = useMemo(() => generateDateRange(fromDate, toDate), [fromDate, toDate]);
 
   function toggleTask(dateKey, taskId) {
-    setTasksByDate(prev => {
-      const dayTasks = prev[dateKey] || [];
-      return {
-        ...prev,
-        [dateKey]: dayTasks.map(t => t.id === taskId ? { ...t, done: !t.done } : t)
-      };
-    });
+    toggleTaskStore(dateKey, taskId);
   }
 
   function addTask(dateKey) {
     const text = (inputsByDate[dateKey] || "").trim();
     if (!text) return;
 
-    setTasksByDate(prev => {
-      const dayTasks = prev[dateKey] || [];
-      return {
-        ...prev,
-        [dateKey]: [...dayTasks, { id: Date.now() + Math.random(), name: text, done: false }]
-      };
+    addTaskStore(dateKey, { 
+      id: Date.now() + Math.random(), 
+      name: text, 
+      priority: "Medium", 
+      done: false 
     });
     setInputsByDate(prev => ({ ...prev, [dateKey]: "" }));
   }
 
   function deleteTask(dateKey, taskId) {
-    setTasksByDate(prev => {
-      const dayTasks = prev[dateKey] || [];
-      return {
-        ...prev,
-        [dateKey]: dayTasks.filter(t => t.id !== taskId)
-      };
-    });
+    deleteTaskStore(dateKey, taskId);
   }
 
   return (

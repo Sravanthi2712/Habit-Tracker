@@ -209,12 +209,9 @@
 .streak-number {
   font-size: 48px;
   font-weight: 800;
-  color: #0f172a;
+  color: #f43f5e;
+  display: inline-block;
   line-height: 1;
-  background: linear-gradient(to right, #f43f5e, #fb923c);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
 }
 
 /* Consistency */

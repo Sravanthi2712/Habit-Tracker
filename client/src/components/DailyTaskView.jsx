@@ -1,4 +1,6 @@
 import { useMemo, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import useTaskStore from "../store/useTaskStore";
 import "./TaskPage.css";
 
 const PRIORITY_ORDER = {
@@ -7,24 +9,8 @@ const PRIORITY_ORDER = {
   Low: 2
 };
 
-const STORAGE_KEY = "task-tracker-v1";
-
 function getTodayKey() {
   return new Date().toISOString().split("T")[0];
-}
-
-function safeReadStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) || {};
-  } catch {
-    return {};
-  }
-}
-
-function safeWriteStorage(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
 function makeId(counterRef) {
@@ -48,18 +34,17 @@ export default function DailyTaskView() {
   const [priority, setPriority] = useState("Medium");
   
   const todayKey = getTodayKey();
-  const [allTasks, setAllTasks] = useState(() => safeReadStorage());
-  const tasks = allTasks[todayKey] || [];
+  
+  // Zustand Store Connection
+  const tasksByDate = useTaskStore((state) => state.tasksByDate);
+  const tasks = useMemo(() => tasksByDate[todayKey] || [], [tasksByDate, todayKey]);
+  
+  const addTaskStore = useTaskStore((state) => state.addTask);
+  const toggleTaskStore = useTaskStore((state) => state.toggleTask);
+  const deleteMultipleTasksStore = useTaskStore((state) => state.deleteMultipleTasks);
+  const updateTaskNameStore = useTaskStore((state) => state.updateTaskName);
+  const updateTaskPriorityStore = useTaskStore((state) => state.updateTaskPriority);
 
-  function setTasks(updater) {
-    setAllTasks(prev => {
-      const dayTasks = prev[todayKey] || [];
-      const nextDayTasks = typeof updater === 'function' ? updater(dayTasks) : updater;
-      const next = { ...prev, [todayKey]: nextDayTasks };
-      safeWriteStorage(next);
-      return next;
-    });
-  }
   const [mode, setMode] = useState("view");
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const dayIdRef = useRef(0);
@@ -77,26 +62,21 @@ export default function DailyTaskView() {
 
   function addTask() {
     const trimmed = taskName.trim();
-    if (!trimmed) {
-      return;
-    }
+    if (!trimmed) return;
 
-    const newTask = {
+    addTaskStore(todayKey, {
       id: makeId(dayIdRef),
       name: trimmed,
       priority,
       done: false
-    };
-
-    setTasks((prev) => [...prev, newTask]);
+    });
+    
     setTaskName("");
     setPriority("Medium");
   }
 
   function toggleTask(id) {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, done: !task.done } : task))
-    );
+    toggleTaskStore(todayKey, id);
   }
 
   function toggleTaskSelection(id) {
@@ -112,10 +92,8 @@ export default function DailyTaskView() {
   }
 
   function deleteSelectedTasks() {
-    if (selectedTaskIds.size === 0) {
-      return;
-    }
-    setTasks((prev) => prev.filter((task) => !selectedTaskIds.has(task.id)));
+    if (selectedTaskIds.size === 0) return;
+    deleteMultipleTasksStore(todayKey, selectedTaskIds);
     setSelectedTaskIds(new Set());
     setMode("view");
   }
@@ -140,15 +118,11 @@ export default function DailyTaskView() {
   }
 
   function updateTaskName(id, name) {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, name } : task))
-    );
+    updateTaskNameStore(todayKey, id, name);
   }
 
   function updateTaskPriority(id, nextPriority) {
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? { ...task, priority: nextPriority } : task))
-    );
+    updateTaskPriorityStore(todayKey, id, nextPriority);
   }
 
   function onSubmit(event) {
@@ -219,48 +193,67 @@ export default function DailyTaskView() {
           )}
 
           <ul className="task-list">
-            {tasks.length === 0 && <li className="empty-state">No tasks added yet.</li>}
+            <AnimatePresence>
+              {tasks.length === 0 && (
+                <motion.li 
+                  initial={{ opacity: 0 }} 
+                  animate={{ opacity: 1 }} 
+                  exit={{ opacity: 0 }} 
+                  className="empty-state"
+                >
+                  No tasks added yet.
+                </motion.li>
+              )}
 
-            {sortedTasks.map((task) => (
-              <li key={task.id} className={task.done ? "task-row done" : "task-row"}>
-                <label className="task-main">
-                  <input
-                    type="checkbox"
-                    checked={mode === "delete" ? selectedTaskIds.has(task.id) : task.done}
-                    onChange={() =>
-                      mode === "delete" ? toggleTaskSelection(task.id) : toggleTask(task.id)
-                    }
-                  />
-                  {mode === "edit" ? (
+              {sortedTasks.map((task) => (
+                <motion.li
+                  layout
+                  initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  key={task.id} 
+                  className={task.done ? "task-row done" : "task-row"}
+                >
+                  <label className="task-main">
                     <input
-                      className="task-inline-input"
-                      value={task.name}
-                      onChange={(event) => updateTaskName(task.id, event.target.value)}
+                      type="checkbox"
+                      checked={mode === "delete" ? selectedTaskIds.has(task.id) : task.done}
+                      onChange={() =>
+                        mode === "delete" ? toggleTaskSelection(task.id) : toggleTask(task.id)
+                      }
                     />
-                  ) : (
-                    <span>{task.name}</span>
-                  )}
-                </label>
+                    {mode === "edit" ? (
+                      <input
+                        className="task-inline-input"
+                        value={task.name}
+                        onChange={(event) => updateTaskName(task.id, event.target.value)}
+                      />
+                    ) : (
+                      <span>{task.name}</span>
+                    )}
+                  </label>
 
-                <div className="task-actions">
-                  {mode === "edit" ? (
-                    <select
-                      className="priority-select"
-                      value={task.priority}
-                      onChange={(event) => updateTaskPriority(task.id, event.target.value)}
-                    >
-                      <option>High</option>
-                      <option>Medium</option>
-                      <option>Low</option>
-                    </select>
-                  ) : (
-                    <span className={`priority-badge ${task.priority.toLowerCase()}`}>
-                      {task.priority}
-                    </span>
-                  )}
-                </div>
-              </li>
-            ))}
+                  <div className="task-actions">
+                    {mode === "edit" ? (
+                      <select
+                        className="priority-select"
+                        value={task.priority || "Medium"}
+                        onChange={(event) => updateTaskPriority(task.id, event.target.value)}
+                      >
+                        <option>High</option>
+                        <option>Medium</option>
+                        <option>Low</option>
+                      </select>
+                    ) : (
+                      <span className={`priority-badge ${(task.priority || "Medium").toLowerCase()}`}>
+                        {task.priority || "Medium"}
+                      </span>
+                    )}
+                  </div>
+                </motion.li>
+              ))}
+            </AnimatePresence>
           </ul>
 
           {mode === "edit" && (
