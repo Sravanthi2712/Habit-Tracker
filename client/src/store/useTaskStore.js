@@ -43,14 +43,21 @@ const useTaskStore = create((set, get) => ({
         headers: getHeaders(),
         body: JSON.stringify(payload)
       });
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        const errorData = await resp.json();
+        window.alert(`Backend Error: ${errorData.error || 'Failed to add task'}`);
+        return;
+      }
       const createdTask = await resp.json();
       
       set(state => {
         const day = state.tasksByDate[dateKey] || [];
         return { tasksByDate: { ...state.tasksByDate, [dateKey]: [...day, createdTask] } };
       });
-    } catch (err) { console.error('Add task failed:', err); }
+    } catch (err) { 
+      console.error('Add task failed:', err);
+      window.alert('Network Error: Make sure the Node Backend (port 5000) is running!');
+    }
   },
 
   toggleTask: async (dateKey, taskId) => {

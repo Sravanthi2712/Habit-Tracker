@@ -11,6 +11,13 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// Logger
+app.use((req, res, next) => {
+  console.log(`[API REQUEST] ${req.method} ${req.path}`);
+  if (req.method !== 'GET') console.log('BODY:', req.body);
+  next();
+});
+
 // Apply JWT Authentication to all /api routes!
 app.use('/api', requireAuth);
 
@@ -28,12 +35,13 @@ app.get('/api/tasks', async (req, res) => {
 app.post('/api/tasks', async (req, res) => {
   const { date_key, name, priority, done, temp_id } = req.body;
   
-  // SECURITY: Force insert user_id based on backend token verification
   const { data, error } = await supabase.from('tasks')
     .insert([{ user_id: req.user.id, date_key, name, priority, done }])
     .select();
     
   if (error) return res.status(400).json({ error: error.message });
+  if (!data || data.length === 0) return res.status(400).json({ error: 'Supabase RLS is blocking inserts!' });
+  
   res.status(201).json({ ...data[0], temp_id }); 
 });
 
@@ -46,7 +54,6 @@ app.put('/api/tasks/:id', async (req, res) => {
   if (priority !== undefined) updates.priority = priority;
   if (done !== undefined) updates.done = done;
 
-  // SECURITY: .eq('user_id', req.user.id) prevents modifying someone else's task!
   const { data, error } = await supabase.from('tasks')
     .update(updates)
     .eq('id', id)
@@ -54,7 +61,7 @@ app.put('/api/tasks/:id', async (req, res) => {
     .select();
     
   if (error) return res.status(400).json({ error: error.message });
-  res.json(data[0]);
+  res.json(data ? data[0] : {});
 });
 
 app.delete('/api/tasks/:id', async (req, res) => {
@@ -92,6 +99,7 @@ app.post('/api/habits', async (req, res) => {
     .insert([{ user_id: req.user.id, name, goal }])
     .select();
   if (error) return res.status(400).json({ error: error.message });
+  if (!data || data.length === 0) return res.status(400).json({ error: 'Supabase RLS is blocking inserts!' });
   
   res.status(201).json({ ...data[0], checks: {} });
 });

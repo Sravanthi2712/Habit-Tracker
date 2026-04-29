@@ -44,11 +44,18 @@ const useHabitStore = create((set, get) => ({
         headers: getHeaders(),
         body: JSON.stringify(payload)
       });
-      if (!resp.ok) return;
+      if (!resp.ok) {
+        const errorData = await resp.json();
+        window.alert(`Backend Error: ${errorData.error || 'Failed to add habit'}`);
+        return;
+      }
       const createdHabit = await resp.json();
       
       set(state => ({ habits: [...state.habits, createdHabit] }));
-    } catch (err) { console.error('Add habit failed:', err); }
+    } catch (err) { 
+      console.error('Add habit failed:', err);
+      window.alert('Network Error: Make sure the Node Backend is running!');
+    }
   },
 
   updateHabitName: async (id, newName) => {
