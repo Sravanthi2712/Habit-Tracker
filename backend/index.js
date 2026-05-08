@@ -152,6 +152,10 @@ app.post('/api/habits/:id/toggle', async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.send("Backend Working");
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`✅ Secured Backend API Server running on http://localhost:${PORT}`);
