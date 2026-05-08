@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import useAuthStore from './useAuthStore';
 
-const API_URL = 'http://localhost:5000/api/habits';
+const API_URL = 'http://habit-tracker-okab.onrender.com/api/habits';
 
 function getHeaders() {
   const token = useAuthStore.getState().session?.access_token;
